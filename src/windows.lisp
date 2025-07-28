@@ -2,10 +2,10 @@
 ;;; Windows support using Win32 API
 ;;;
 
-(cl:in-package :trivial-clipboard)
+(cl:in-package :sophisticated-clipboard)
 
 (define-foreign-library user32
-  (t (:default "user32")))
+    (t (:default "user32")))
 
 (use-foreign-library user32)
 

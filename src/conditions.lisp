@@ -1,8 +1,8 @@
-(in-package :trivial-clipboard)
+(in-package :sophisticated-clipboard)
 
-(define-condition trivial-clipboard-error (simple-error) ())
+(define-condition sophisticated-clipboard-error (simple-error) ())
 
-(define-condition not-installed (trivial-clipboard-error)
+(define-condition not-installed (sophisticated-clipboard-error)
   ((programs
     :initarg :programs
     :reader not-installed-programs))

@@ -2,13 +2,13 @@
 
 (cl:in-package :cl-user)
 
-(defpackage trivial-clipboard.test
-  (:use :cl :fiveam :trivial-clipboard))
+(defpackage sophisticated-clipboard.test
+  (:use :cl :fiveam :sophisticated-clipboard))
 
-(in-package :trivial-clipboard.test)
+(in-package :sophisticated-clipboard.test)
 
-(def-suite :trivial-clipboard)
-(in-suite :trivial-clipboard)
+(def-suite :sophisticated-clipboard)
+(in-suite :sophisticated-clipboard)
 
 (defparameter *standard-chars* " !\"#$%&'()*+,-./0123456789
 :;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ
@@ -36,14 +36,14 @@
                   (text))))
 
 (test basic-set
-  (is (test-set-and-get *standard-chars*))
-  (is (test-set-and-get *multibyte-chars*))
-  (is (test-set-and-get *emoji-chars*))
-  (signals type-error (text 1)))
+      (is (test-set-and-get *standard-chars*))
+      (is (test-set-and-get *multibyte-chars*))
+      (is (test-set-and-get *emoji-chars*))
+      (signals type-error (text 1)))
 
 (test extra-set
-  (is (test-set-and-get *mixed-newlines*))
-  ;; All ASCII characters. Maybe unnecessary to handle all control chars?
-  (dotimes (i 128)
-    (let ((char (code-char i)))
-      (is (test-set-and-get (format nil "~A equals ~A or ~A" char char char))))))
+      (is (test-set-and-get *mixed-newlines*))
+      ;; All ASCII characters. Maybe unnecessary to handle all control chars?
+      (dotimes (i 128)
+        (let ((char (code-char i)))
+          (is (test-set-and-get (format nil "~A equals ~A or ~A" char char char))))))

@@ -1,4 +1,4 @@
-(in-package :trivial-clipboard)
+(in-package :sophisticated-clipboard)
 
 (defun executable-find (command)
   "Search for COMMAND in the PATH and return the absolute file name.
@@ -45,7 +45,7 @@ copy-command paste-command).")
   (loop :for elt :in *clipboard-commands*
         :for command := (funcall fn elt)
         :when (funcall (second elt))
-        :return command))
+          :return command))
 
 (let ((command nil))
   (defun find-paste-command ()
@@ -118,7 +118,7 @@ methods specializing on specific data types to put into clipboard.
 
 Example: support numbers, converting them to strings
 
-\(defmethod (setf trivial-clipboard:content) ((value number) &key &allow-other-keys)
-  (setf (trivial-clipboard:content) (princ-to-string value)))"))
+\(defmethod (setf sophisticated-clipboard:content) ((value number) &key &allow-other-keys)
+  (setf (sophisticated-clipboard:content) (princ-to-string value)))"))
 
 (push :clipboard-content-method *features*)

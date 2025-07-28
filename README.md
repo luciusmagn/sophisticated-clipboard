@@ -1,36 +1,36 @@
-# trivial-clipboard
+# sophisticated-clipboard
 
-trivial-clipboard let access system clipboard.
+sophisticated-clipboard let access system clipboard.
 
 ## Installation
 
 ```
-(ql:quickload :trivial-clipboard)
+(ql:quickload :sophisticated-clipboard)
 ```
 
 ## Dependencies
 - CFFI (only on Windows)
-
 
 ## Usage
 
 get text from clipboard.
 
 ```
-(trivial-clipboard:text)
+(sophisticated-clipboard:text)
 ```
 
 put text to clipboard.
 
 ```
-(trivial-clipboard:text "put text!")
+(sophisticated-clipboard:text "put text!")
 ```
 
 ## Author
-SANO Masatoshi (snmsts@gmail.com)
+sophisticated fork: Lukáš Hozda (me@mag.wiki)
+original: SANO Masatoshi (snmsts@gmail.com)
 
 ## Project
- * https://github.com/snmsts/trivial-clipboard
+ * https://github.com/luciusmagn/sophisticated-clipboard
 
 ## License
 Licensed under the MIT License.

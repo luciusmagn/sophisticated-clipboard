@@ -1,5 +1,5 @@
 (cl:in-package :cl-user)
 
-(defpackage trivial-clipboard
+(defpackage sophisticated-clipboard
   (:use :cl #+os-windows :cffi)
   (:export :text :content))
