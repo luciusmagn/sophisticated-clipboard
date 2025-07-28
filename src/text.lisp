@@ -15,110 +15,124 @@ Return nil if COMMAND is not found anywhere."
 (defun x-session-p ()
   (find (uiop:getenvp "XDG_SESSION_TYPE") '("x11" "tty") :test #'string=))
 
-(defparameter *clipboard-commands*
-  #+(or darwin macosx)
-  `((:mac ,(constantly t) ("pbcopy") ("pbpaste")))
-  #-(or darwin macosx)
-  `((:wayland wayland-session-p ("wl-copy") ("wl-paste"))
-    (:xclip
-     ,(lambda () (and (executable-find "xclip") (x-session-p)))
-     ("xclip" "-in" "-selection" "clipboard")
-     ("xclip" "-out" "-selection" "clipboard"))
-    (:xsel
-     ,(lambda () (and (executable-find "xsel") (x-session-p)))
-     ("xsel" "--input" "--clipboard")
-     ("xsel" "--output" "--clipboard")))
-  "A list, each element being of the form (clipboard-method predicate
-copy-command paste-command).")
+;;; Platform-specific implementations
+(defmethod clipboard-types ()
+  (cond
+    ;; Try X11
+    ((and (uiop:getenvp "DISPLAY") (executable-find "xclip"))
+     (let ((output (uiop:run-program
+                    '("xclip" "-selection" "clipboard" "-target" "TARGETS" "-out")
+                    :output '(:string :stripped t)
+                    :ignore-error-status t)))
+       (when output
+         (mapcar #'make-clipboard-type
+                 (remove-if (lambda (s) (or (string= s "TARGETS")
+                                            (string= s "")))
+                            (uiop:split-string output :separator '(#\Newline)))))))
+    ;; Then try Wayland
+    ((wayland-session-p)
+     (let ((output (uiop:run-program '("wl-paste" "--list-types")
+                                     :output '(:string :stripped t)
+                                     :ignore-error-status t)))
+       (when output
+         (princ output)
+         (mapcar #'make-clipboard-type
+                 (uiop:split-string output :separator '(#\Newline))))))
+    (t nil)))
 
-(defun clipboard-programs (fn)
-  (loop :for elt :in *clipboard-commands*
-        :collect (first (funcall fn elt))))
+(defmethod clipboard-has-type-p ((mime-type string))
+  (find mime-type (clipboard-types) :key #'mime-type :test #'string=))
 
-(defun get-paste-command (elt)
-  (fourth elt))
+(defmethod clipboard-get ((mime-type string))
+  (cond
+    ((wayland-session-p)
+     (clipboard-get-wayland mime-type))
+    ((x-session-p)
+     (clipboard-get-x11 mime-type))
+    (t (error "Unsupported platform"))))
 
-(defun get-copy-command (elt)
-  (third elt))
+(defmethod clipboard-set (data (mime-type string))
+  (cond
+    ((wayland-session-p)
+     (clipboard-set-wayland data mime-type))
+    ((x-session-p)
+     (clipboard-set-x11 data mime-type))
+    (t (error "Unsupported platform"))))
 
-(defun find-command (fn)
-  (loop :for elt :in *clipboard-commands*
-        :for command := (funcall fn elt)
-        :when (funcall (second elt))
-          :return command))
+;;; Wayland implementation
+(defun clipboard-get-wayland (mime-type)
+  (let ((is-text (or (search "text/" mime-type)
+                     (member mime-type '("STRING" "TEXT" "UTF8_STRING" "COMPOUND_TEXT")
+                             :test #'string=))))
+    (if is-text
+        (uiop:run-program `("wl-paste" "--type" ,mime-type)
+                          :output '(:string :stripped t))
+        ;; Binary data
+        (with-output-to-sequence (stream :element-type '(unsigned-byte 8))
+          (uiop:run-program `("wl-paste" "--type" ,mime-type)
+                            :output stream)))))
 
-(let ((command nil))
-  (defun find-paste-command ()
-    (or command
-        (setf command (find-command #'get-paste-command)))))
 
-(let ((command nil))
-  (defun find-copy-command ()
-    (or command
-        (setf command (find-command #'get-copy-command)))))
-
-(defun paste ()
-  (let ((command (find-paste-command)))
-    (if command
-        (with-output-to-string (output)
-          (uiop:run-program command
-                            :output output))
-        (error 'not-installed
-               :programs (clipboard-programs #'get-paste-command)))))
-
-(defun copy (text)
-  (let ((command (find-copy-command)))
-    (if command
-        (with-input-from-string (input text)
-          (uiop:run-program command
+(defun clipboard-set-wayland (data mime-type)
+  (let ((is-text (or (stringp data)
+                     (and (search "text/" mime-type))
+                     (member mime-type '("STRING" "TEXT" "UTF8_STRING" "COMPOUND_TEXT")
+                             :test #'string=))))
+    (if is-text
+        (with-input-from-string (input (if (stringp data) data (error "Non-string data for text type")))
+          (uiop:run-program `("wl-copy" "--type" ,mime-type)
                             :input input))
-        (error 'not-installed
-               :programs (clipboard-programs #'get-copy-command)))))
+        ;; Binary data
+        (with-input-from-sequence (input data)
+          (uiop:run-program `("wl-copy" "--type" ,mime-type)
+                            :input input)))))
 
-(defun text (&optional data)
-  "If DATA is STRING, it is set to the clipboard. An ERROR is
-signalled if the copy failed.
 
-If DATA is NIL, TEXT returns the STRING from the clipboard. If the
-copy failed, it returns NIL instead."
-  (etypecase data
-    (string
-     #+os-windows
-     (set-text-on-win32 data)
-     #+(not os-windows)
-     (copy data)
-     data)
-    (null
-     (or
-      #+os-windows
-      (get-text-on-win32)
-      #+(not os-windows)
-      (paste)))))
+;;; X11 implementation
 
-(defgeneric content (&key &allow-other-keys)
-  (:method (&key &allow-other-keys)
-    #+os-windows (get-text-on-win32)
-    #-os-windows (paste))
-  (:documentation "A generic function to get the contents of the clipboard.
+(defun clipboard-get-x11 (mime-type)
+  (let ((is-text (search "text/" mime-type)))
+    (if is-text
+        (uiop:run-program `("xclip" "-selection" "clipboard" "-target" ,mime-type "-out")
+                          :output '(:string :stripped t))
+        (with-output-to-sequence (stream :element-type '(unsigned-byte 8))
+          (uiop:run-program `("xclip" "-selection" "clipboard" "-target" ,mime-type "-out")
+                            :output stream)))))
 
-Returns strings by default.
+(defun clipboard-set-x11 (data mime-type)
+  (let ((is-text (stringp data)))
+    (if is-text
+        (with-input-from-string (input data)
+          (uiop:run-program `("xclip" "-selection" "clipboard" "-target" ,mime-type "-in")
+                            :input input))
+        (with-input-from-sequence (input data)
+          (uiop:run-program `("xclip" "-selection" "clipboard" "-target" ,mime-type "-in")
+                            :input input)))))
 
-:around methods and primary method re-definitions can override return
-value to some structured data."))
+;;; High-level convenience API
 
-(defgeneric (setf content) (value &key &allow-other-keys)
-  (:method (value &key &allow-other-keys)
-    #+os-windows (set-text-on-win32 data)
-    #-os-windows (copy value)
-    value)
-  (:documentation "A generic function to set the contents of the clipboard to NEW-VALUE.
+(defun clipboard-text ()
+  "Get text from clipboard, trying common text formats"
+  (loop for mime in '("text/plain;charset=utf-8" "text/plain" "UTF8_STRING" "STRING")
+        when (clipboard-has-type-p mime)
+          return (clipboard-get mime)))
 
-Default method only specializes on string, but callers can define more
-methods specializing on specific data types to put into clipboard.
+(defun (setf clipboard-text) (text)
+  "Set clipboard text"
+  (clipboard-set text "text/plain;charset=utf-8")
+  text)
 
-Example: support numbers, converting them to strings
+(defun clipboard-image (&optional (preferred-type "image/png"))
+  "Get image from clipboard as byte array"
+  (let ((image-types (remove-if-not (lambda (type)
+                                      (eq (type-category type) :image))
+                                    (clipboard-types))))
+    (when image-types
+      (clipboard-get (or (find preferred-type image-types
+                               :key #'mime-type :test #'string=)
+                         (mime-type (first image-types)))))))
 
-\(defmethod (setf sophisticated-clipboard:content) ((value number) &key &allow-other-keys)
-  (setf (sophisticated-clipboard:content) (princ-to-string value)))"))
-
-(push :clipboard-content-method *features*)
+(defun (setf clipboard-image) (data &optional (mime-type "image/png"))
+  "Set clipboard image from byte array"
+  (clipboard-set data mime-type)
+  data)
