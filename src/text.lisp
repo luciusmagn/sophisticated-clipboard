@@ -16,8 +16,13 @@ Return nil if COMMAND is not found anywhere."
   (find (uiop:getenvp "XDG_SESSION_TYPE") '("x11" "tty") :test #'string=))
 
 ;;; Platform-specific implementations
+#-os-windows
 (defmethod clipboard-types ()
   (cond
+    ;; On Windows, we do windows
+    #+os-windows
+    ((uiop:os-windows-p)
+     (call-next-method))
     ;; Try X11
     ((and (uiop:getenvp "DISPLAY") (executable-find "xclip"))
      (let ((output (uiop:run-program
@@ -40,19 +45,33 @@ Return nil if COMMAND is not found anywhere."
                  (uiop:split-string output :separator '(#\Newline))))))
     (t nil)))
 
+#-os-windows
 (defmethod clipboard-has-type-p ((mime-type string))
+  #+os-windows
+  (if (uiop:os-windows-p)
+      (call-next-method)
+      (find mime-type (clipboard-types) :key #'mime-type :test #'string=))
+  #-os-windows
   (find mime-type (clipboard-types) :key #'mime-type :test #'string=))
 
+#-os-windows
 (defmethod clipboard-get ((mime-type string))
   (cond
+    #+os-windows
+    ((uiop:os-windows-p)
+     (call-next-method))
     ((wayland-session-p)
      (clipboard-get-wayland mime-type))
     ((x-session-p)
      (clipboard-get-x11 mime-type))
     (t (error "Unsupported platform"))))
 
+#-os-windows
 (defmethod clipboard-set (data (mime-type string))
   (cond
+    #+os-windows
+    ((uiop:os-windows-p)
+     (call-next-method))
     ((wayland-session-p)
      (clipboard-set-wayland data mime-type))
     ((x-session-p)
