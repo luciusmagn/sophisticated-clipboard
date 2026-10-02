@@ -115,6 +115,22 @@
         (is (string= sample (clipboard-text))))
       (skip "no clipboard backend is reachable from this process")))
 
+(test live-octet-round-trip
+  (if (clipboard-available-p)
+      (let ((octets (make-array 300 :element-type '(unsigned-byte 8)))
+            (backend (sophisticated-clipboard:clipboard-detect-backend)))
+        (dotimes (index 300)
+          (setf (aref octets index) (mod (* index 7) 256)))
+        (if (and (typep backend 'x11-backend)
+                 (eq :xsel (x11-backend-tool backend)))
+            (skip "xsel carries text only")
+            (progn
+              (sophisticated-clipboard:clipboard-set octets "application/octet-stream")
+              (is (equalp octets
+                          (sophisticated-clipboard:clipboard-get
+                           "application/octet-stream"))))))
+      (skip "no clipboard backend is reachable from this process")))
+
 (test rejects-wrong-data
   (if (clipboard-available-p)
       (signals type-error (setf (clipboard-text) 1))
