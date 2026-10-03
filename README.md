@@ -89,7 +89,7 @@ original: SANO Masatoshi (snmsts@gmail.com)
 
 ## Project
 
-https://github.com/luciusmagn/sophisticated-clipboard
+https://github.com/lambda-symbolics/sophisticated-clipboard
 
 ## License
 
