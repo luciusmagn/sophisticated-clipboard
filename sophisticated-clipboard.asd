@@ -8,6 +8,7 @@
   :license "MIT"
   :depends-on ("uiop"
                "flexi-streams"
+               "cl-base64"
                #+os-windows "cffi")
   :serial t
   :components ((:module "src"
@@ -21,6 +22,7 @@
                  (:file "commands")
                  (:file "posix")
                  (:file "darwin")
+                 (:file "terminal")
                  #+os-windows (:file "windows")
                  (:file "detection")
                  (:file "api"))))

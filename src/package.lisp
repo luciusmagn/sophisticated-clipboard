@@ -20,6 +20,10 @@
    #:x11-backend-tool
    #:darwin-backend
    #:windows-backend
+   #:terminal-backend
+   #:terminal-backend-writer
+   #:terminal-backend-selection
+   #:terminal-clipboard-sequence
    #:backend-types
    #:backend-get
    #:backend-set
@@ -32,6 +36,7 @@
    #:clipboard-set
    #:clipboard-text
    #:clipboard-image
+   #:clipboard-copy-text
 
    ;; Conditions
    #:sophisticated-clipboard-error

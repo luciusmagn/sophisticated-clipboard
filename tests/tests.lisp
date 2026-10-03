@@ -2,7 +2,17 @@
   (:use #:cl #:fiveam)
   (:import-from #:sophisticated-clipboard
                 #:clipboard-available-p
+                #:backend-get
+                #:backend-set
+                #:backend-text
+                #:backend-types
+                #:clipboard-backend
                 #:clipboard-backend-name
+                #:clipboard-copy-text
+                #:clipboard-unsupported-type
+                #:sophisticated-clipboard-error
+                #:terminal-backend
+                #:terminal-clipboard-sequence
                 #:clipboard-detect-backend
                 #:clipboard-text
                 #:clipboard-unavailable
@@ -135,3 +145,83 @@
   (if (clipboard-available-p)
       (signals type-error (setf (clipboard-text) 1))
       (skip "no clipboard backend is reachable from this process")))
+
+(defun osc-52 (selection payload)
+  "Return the exact OSC 52 ST control for SELECTION and base64 PAYLOAD."
+  (format nil "~C]52;~A;~A~C\\" (code-char 27) selection payload (code-char 27)))
+
+(defclass recording-backend (clipboard-backend)
+  ((texts :initform nil :accessor recording-backend-texts)
+   (fail-p :initarg :fail-p :initform nil :reader recording-backend-fail-p))
+  (:documentation "A host backend recording copies, or refusing every one."))
+
+(defmethod clipboard-backend-name ((backend recording-backend))
+  :recording)
+
+(defmethod backend-types ((backend recording-backend))
+  nil)
+
+(defmethod backend-get ((backend recording-backend) mime-type)
+  (declare (ignore mime-type))
+  nil)
+
+(defmethod backend-set ((backend recording-backend) data mime-type)
+  (declare (ignore mime-type))
+  (when (recording-backend-fail-p backend)
+    (error 'clipboard-unavailable :reason "refused for the test"))
+  (push data (recording-backend-texts backend)))
+
+(test terminal-sequence
+  (is (string= (osc-52 "c" "aGk=") (terminal-clipboard-sequence "hi")))
+  (is (string= (osc-52 "p" "aGk=") (terminal-clipboard-sequence "hi" :selection :primary)))
+  (is (string= (osc-52 "c" "4pyTCuKclw==")
+               (terminal-clipboard-sequence (format nil "~C~%~C"
+                                                    (code-char #x2713)
+                                                    (code-char #x2717)))))
+  (signals type-error (terminal-clipboard-sequence 1)))
+
+(test terminal-backend
+  (let* ((written '())
+         (backend (make-instance 'terminal-backend
+                                 :writer (lambda (control) (push control written) t))))
+    (is (eq :terminal (clipboard-backend-name backend)))
+    (setf (backend-text backend) "hi")
+    (is (equal (list (osc-52 "c" "aGk=")) written))
+    (signals clipboard-unsupported-type
+      (backend-set backend (make-array 1 :element-type '(unsigned-byte 8)) "image/png"))
+    (signals clipboard-unavailable (backend-types backend))
+    (signals clipboard-unavailable (backend-text backend)))
+  (signals clipboard-unavailable
+    (setf (backend-text (make-instance 'terminal-backend :writer (constantly nil))) "hi"))
+  (signals error (make-instance 'terminal-backend)))
+
+(test copy-text
+  (let ((host (make-instance 'recording-backend))
+        (written '()))
+    (multiple-value-bind (host-p terminal-p condition)
+        (clipboard-copy-text "hi"
+                             :backend host
+                             :terminal-writer (lambda (control) (push control written) t))
+      (is-true host-p)
+      (is-true terminal-p)
+      (is (null condition))
+      (is (equal '("hi") (recording-backend-texts host)))
+      (is (equal (list (osc-52 "c" "aGk=")) written))))
+  (multiple-value-bind (host-p terminal-p condition)
+      (clipboard-copy-text "hi"
+                           :backend (make-instance 'recording-backend :fail-p t)
+                           :terminal-writer (constantly t))
+    (is-false host-p)
+    (is (eq t terminal-p))
+    (is (typep condition 'sophisticated-clipboard-error)))
+  (multiple-value-bind (host-p terminal-p condition)
+      (clipboard-copy-text "hi"
+                           :backend (make-instance 'recording-backend :fail-p t)
+                           :terminal-writer (constantly nil))
+    (is-false host-p)
+    (is-false terminal-p)
+    (is (typep condition 'clipboard-unavailable)))
+  (multiple-value-bind (host-p terminal-p)
+      (clipboard-copy-text "hi" :backend (make-instance 'recording-backend))
+    (is-true host-p)
+    (is-false terminal-p)))

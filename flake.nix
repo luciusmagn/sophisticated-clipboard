@@ -13,6 +13,7 @@
 
         sbcl' = pkgs.sbcl.withPackages (ps: with ps; [
           cffi
+          cl-base64
           flexi-streams
           fiveam
         ]);

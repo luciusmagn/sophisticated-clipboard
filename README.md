@@ -10,8 +10,8 @@ no compiled glue code.
 (ql:quickload :sophisticated-clipboard)
 ```
 
-The system depends on UIOP and flexi-streams everywhere, and on CFFI only on
-Windows.
+The system depends on UIOP, flexi-streams and cl-base64 everywhere, and on
+CFFI only on Windows.
 
 ## Usage
 
@@ -57,6 +57,33 @@ explicitly when the default is wrong for your session:
         (make-instance 'sophisticated-clipboard:x11-backend :tool :xsel)))
   (sophisticated-clipboard:clipboard-text))
 ```
+
+## Terminal route (OSC 52)
+
+Over SSH or a session relay the host clipboard belongs to the wrong machine.
+A `terminal-backend` instead writes an OSC 52 request, and the user's terminal
+copies the text on the machine they sit at. It takes a `:writer` function,
+which receives each control string, writes and flushes it, and returns true
+when a terminal received it; `:selection` is `:clipboard` (the default) or
+`:primary`. The route only writes text: reading signals
+`clipboard-unavailable`, and so does a writer returning false.
+
+`clipboard-copy-text` copies to the host clipboard and, given a
+`:terminal-writer`, through the terminal as well, since a terminal that
+ignores OSC 52 loses nothing. It returns whether the host took the text,
+whether a terminal took it, and the host failure condition or `nil`:
+
+```lisp
+(sophisticated-clipboard:clipboard-copy-text
+ "put text!"
+ :terminal-writer (lambda (control)
+                    (write-string control *terminal-io*)
+                    (finish-output *terminal-io*)
+                    t))
+;; => T, T, NIL
+```
+
+`terminal-clipboard-sequence` returns the control itself.
 
 Every backend answers the same generic functions: `backend-types`,
 `backend-get`, `backend-set`, and `backend-text`. Subclass `clipboard-backend`
